@@ -59,6 +59,7 @@ prefix_ip_addr = "http://127.0.0.1:8000/api/ipam/prefixes/?contains="
 
 
 results=[]
+results_egress=[]
 for sec_group in sec_groups_p:
     sec_id = sec_groups_p[sec_group]["id"]
     for ingress_statement in sec_groups_p[sec_group]["ingress"]:
@@ -146,6 +147,96 @@ for sec_group in sec_groups_p:
                                 f"{protocol}={ports_opened}"
                             ]
                         )
+    for egress_statement in sec_groups_p[sec_group]["egress"]:
+        protocol=egress_statement['IpProtocol']
+        if protocol == '-1':
+            ports_opened = "any"
+            protocol = "ip"
+        elif egress_statement['FromPort']==egress_statement['ToPort']:
+            ports_opened = egress_statement['FromPort']
+        else:
+            ports_opened = str(egress_statement['FromPort']) + "-" + str(egress_statement['ToPort'])
+        if len(egress_statement["IpRanges"]) == 0:
+            draft_results = []
+            for ec2_instance in ec2_p:
+                for item in ec2_p[ec2_instance]['sgs_applied']:
+                    if item['GroupId'] == sec_id:
+                        ec2_ip_addr = ec2_p[ec2_instance]['ip_addr']
+                        ec2_id = ec2_p[ec2_instance]['id']
+                        target_url = prefix_ip_addr + ec2_ip_addr 
+                        ip_data =  requests.get(target_url , headers=headers_netbox).json()
+                        dst_subnet = ip_data['results'][0]['prefix']
+                        site_dst = ip_data['results'][0]['site']['name']
+                        role_dst = ip_data['results'][0]['role']['name']
+                        draft_results.append(
+                            [
+                                ec2_instance,
+                                ec2_id,
+                                ec2_ip_addr,
+                                dst_subnet,
+                                f"R-{role_dst}-{site_dst}",
+                                f"{protocol}={ports_opened}"
+                            ]
+                        )
+            ec2_source_list = {}
+            for item in draft_results:
+                ec2_source_list[item[1]] = item[0]
+            for item in draft_results:
+                src_string = ""
+                for instance in ec2_source_list:
+                    if instance == item[1]:
+                        continue
+                    src_string = src_string + ";" + ec2_source_list[instance] + "__" + instance
+                results_egress.append(
+                    [
+                        account_id,
+                        sec_id,
+                        item[0],
+                        item[1],
+                        item[2],
+                        item[3],
+                        item[4],
+                        "security_group-as-destination",
+                        src_string[1:],
+                        item[5]
+                    ]
+                )                            
+        for ip_range in egress_statement['IpRanges']:
+            subnet = ip_range['CidrIp']
+            if subnet == "0.0.0.0/0":
+                site = "sa"
+                role = "any"
+            else:
+                target_url = prefix_url + subnet
+                prefix_data =  requests.get(target_url , headers=headers_netbox).json()
+                site = prefix_data['results'][0]['site']['name']
+                role = prefix_data['results'][0]['role']['name']
+            for ec2_instance in ec2_p:
+                for item in ec2_p[ec2_instance]['sgs_applied']:
+                    if item['GroupId'] == sec_id:
+                        ec2_ip_addr = ec2_p[ec2_instance]['ip_addr']
+                        ec2_id = ec2_p[ec2_instance]['id']
+                        target_url = prefix_ip_addr + ec2_ip_addr 
+                        ip_data =  requests.get(target_url , headers=headers_netbox).json()
+                        dst_subnet = ip_data['results'][0]['prefix']
+                        site_dst = ip_data['results'][0]['site']['name']
+                        role_dst = ip_data['results'][0]['role']['name']
+                        results_egress.append(
+                            [
+                                account_id,
+                                sec_id,
+                                ec2_instance,
+                                ec2_id,
+                                ec2_ip_addr,
+                                dst_subnet,
+                                f"R-{role_dst}-{site_dst}",
+                                subnet,
+                                f"R-{role}-{site}",
+                                f"{protocol}={ports_opened}"
+                            ]
+                        )
+
+
 
 # Clone a remote repository
 repo_url = "git@github.com:guidodg86/sg-database.git"
@@ -154,7 +245,7 @@ repo = git.Repo.clone_from(repo_url, local_path)
 origin = repo.remote(name='origin')
 
 
-with open("./temp_sg-database/ingress.csv", "w", newline='') as csv_ingress_f:
+with open("./temp_sg-database/inbound.csv", "w", newline='') as csv_ingress_f:
     writer = csv.writer(csv_ingress_f)
     writer.writerow(
         [
@@ -172,11 +263,31 @@ with open("./temp_sg-database/ingress.csv", "w", newline='') as csv_ingress_f:
     )
     writer.writerows(results)
 
-repo.index.add(['ingress.csv'])
+with open("./temp_sg-database/outbound.csv", "w", newline='') as csv_egress_f:
+    writer = csv.writer(csv_egress_f)
+    writer.writerow(
+        [
+            "Account ID",
+            "Security Group",
+            "Ec2 name",
+            "Ec2 Id",
+            "Ec2 IP",
+            "Source subnet",
+            "Source role-site",
+            "Destination subnet",
+            "Destination role-site",  
+            "port and protocol"         
+        ]
+    )
+    writer.writerows(results_egress)
+
+
+repo.index.add(['inbound.csv', 'outbound.csv'])
 repo.index.commit('Automatic update of sg information')
 origin.push()
 
 shutil.rmtree(local_path, ignore_errors=True)
+pass
 
 
 
