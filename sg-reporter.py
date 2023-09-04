@@ -266,9 +266,9 @@ headers_outbound =         [
 
 #Creating sorted panda df
 df_inbound = pd.DataFrame(results, columns=headers_inbound)
-df_sorted_inbound = df_inbound.sort_values(by = ['Security Group', 'Ec2 Id'], ascending = [True, True], na_position = 'first')
+df_sorted_inbound = df_inbound.sort_values(by = ['Security Group', 'Ec2 Id', 'Source subnet'], ascending = [True, True, True], na_position = 'first')
 df_outbound = pd.DataFrame(results_egress, columns=headers_outbound)
-df_sorted_outbound = df_outbound.sort_values(by = ['Security Group', 'Ec2 Id'], ascending = [True, True], na_position = 'first')
+df_sorted_outbound = df_outbound.sort_values(by = ['Security Group', 'Ec2 Id', 'Destination subnet'], ascending = [True, True, True], na_position = 'first')
 
 
 # Clone a remote repository
