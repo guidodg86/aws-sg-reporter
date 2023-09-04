@@ -4,8 +4,12 @@ import requests
 import os
 import git
 import shutil
-import csv
 import pandas as pd
+
+import logging
+
+logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.INFO)
+logging.info('Connecting to AWS...')
 
 client = boto3.client("sts")
 account_id = client.get_caller_identity()["Account"]
@@ -20,10 +24,12 @@ try:
 except ClientError as e:
     print(e)
 
+
 try:
     ec2_instances = ec2.describe_instances()
 except ClientError as e:
     print(e)
+
 
 sec_groups_p = {}
 for item in sec_group_data['SecurityGroups']:
@@ -37,6 +43,7 @@ for item in sec_group_data['SecurityGroups']:
     sec_groups_p[name]['id'] = group_id
     sec_groups_p[name]['ingress'] = ingress
     sec_groups_p[name]['egress'] = egress
+logging.info('Downloaded info from AWS about security groups')
 
 ec2_p = {}     
 for item in ec2_instances['Reservations']:
@@ -49,8 +56,7 @@ for item in ec2_instances['Reservations']:
         ec2_p[name]['id']=id
         ec2_p[name]['ip_addr']=ip_addr
         ec2_p[name]['sgs_applied']=sgs_applied     
-pass
-
+logging.info('Downloaded info from AWS about ec2 instance')
 
 headers_netbox = {
     'Authorization': f'Token {os.getenv("TF_VAR_netbox_token")}',
@@ -58,7 +64,7 @@ headers_netbox = {
 prefix_url = "http://127.0.0.1:8000/api/ipam/prefixes/?q="
 prefix_ip_addr = "http://127.0.0.1:8000/api/ipam/prefixes/?contains="
 
-
+logging.info('Processing security groups...')
 results=[]
 results_egress=[]
 for sec_group in sec_groups_p:
@@ -77,6 +83,7 @@ for sec_group in sec_groups_p:
                         ec2_ip_addr = ec2_p[ec2_instance]['ip_addr']
                         ec2_id = ec2_p[ec2_instance]['id']
                         target_url = prefix_ip_addr + ec2_ip_addr 
+                        logging.info(f'Querying netbox in {target_url}') 
                         ip_data =  requests.get(target_url , headers=headers_netbox).json()
                         dst_subnet = ip_data['results'][0]['prefix']
                         site_dst = ip_data['results'][0]['site']['name']
@@ -121,6 +128,7 @@ for sec_group in sec_groups_p:
                 role = "any"
             else:
                 target_url = prefix_url + subnet
+                logging.info(f'Querying netbox in {target_url}') 
                 prefix_data =  requests.get(target_url , headers=headers_netbox).json()
                 site = prefix_data['results'][0]['site']['name']
                 role = prefix_data['results'][0]['role']['name']
@@ -130,6 +138,7 @@ for sec_group in sec_groups_p:
                         ec2_ip_addr = ec2_p[ec2_instance]['ip_addr']
                         ec2_id = ec2_p[ec2_instance]['id']
                         target_url = prefix_ip_addr + ec2_ip_addr 
+                        logging.info(f'Querying netbox in {target_url}') 
                         ip_data =  requests.get(target_url , headers=headers_netbox).json()
                         dst_subnet = ip_data['results'][0]['prefix']
                         site_dst = ip_data['results'][0]['site']['name']
@@ -164,7 +173,8 @@ for sec_group in sec_groups_p:
                     if item['GroupId'] == sec_id:
                         ec2_ip_addr = ec2_p[ec2_instance]['ip_addr']
                         ec2_id = ec2_p[ec2_instance]['id']
-                        target_url = prefix_ip_addr + ec2_ip_addr 
+                        target_url = prefix_ip_addr + ec2_ip_addr
+                        logging.info(f'Querying netbox in {target_url}') 
                         ip_data =  requests.get(target_url , headers=headers_netbox).json()
                         dst_subnet = ip_data['results'][0]['prefix']
                         site_dst = ip_data['results'][0]['site']['name']
@@ -209,6 +219,7 @@ for sec_group in sec_groups_p:
                 role = "any"
             else:
                 target_url = prefix_url + subnet
+                logging.info(f'Querying netbox in {target_url}')
                 prefix_data =  requests.get(target_url , headers=headers_netbox).json()
                 site = prefix_data['results'][0]['site']['name']
                 role = prefix_data['results'][0]['role']['name']
@@ -217,7 +228,8 @@ for sec_group in sec_groups_p:
                     if item['GroupId'] == sec_id:
                         ec2_ip_addr = ec2_p[ec2_instance]['ip_addr']
                         ec2_id = ec2_p[ec2_instance]['id']
-                        target_url = prefix_ip_addr + ec2_ip_addr 
+                        target_url = prefix_ip_addr + ec2_ip_addr
+                        logging.info(f'Querying netbox in {target_url}') 
                         ip_data =  requests.get(target_url , headers=headers_netbox).json()
                         dst_subnet = ip_data['results'][0]['prefix']
                         site_dst = ip_data['results'][0]['site']['name']
@@ -236,6 +248,7 @@ for sec_group in sec_groups_p:
                                 f"{protocol}={ports_opened}"
                             ]
                         )
+    logging.info(f'Processed {sec_id}')
 
 
 headers_inbound =        [
