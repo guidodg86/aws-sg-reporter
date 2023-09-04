@@ -2,10 +2,14 @@ import boto3
 from botocore.exceptions import ClientError
 import requests
 import os
-
+import git
+import shutil
+import csv
 
 client = boto3.client("sts")
 account_id = client.get_caller_identity()["Account"]
+# By passing account_id to avoid publishing it on gitlab
+account_id = 1111111111111
 
 ec2 = boto3.client('ec2')
 
@@ -85,29 +89,29 @@ for sec_group in sec_groups_p:
                                 f"{protocol}={ports_opened}"
                             ]
                         )
-                        ec2_source_list = {}
-                        for item in draft_results:
-                            ec2_source_list[item[1]] = item[0]
-                        for item in draft_results:
-                            src_string = ""
-                            for instance in ec2_source_list:
-                                if instance == item[1]:
-                                    continue
-                                src_string = src_string + ";" + ec2_source_list[instance] + "__" + instance
-                            results.append(
-                                [
-                                    account_id,
-                                    sec_id,
-                                    "security_group as source",
-                                    src_string[1:],
-                                    item[0],
-                                    item[1],
-                                    item[2],
-                                    item[3],
-                                    item[4],
-                                    item[5]
-                                ]
-                            )                            
+            ec2_source_list = {}
+            for item in draft_results:
+                ec2_source_list[item[1]] = item[0]
+            for item in draft_results:
+                src_string = ""
+                for instance in ec2_source_list:
+                    if instance == item[1]:
+                        continue
+                    src_string = src_string + ";" + ec2_source_list[instance] + "__" + instance
+                results.append(
+                    [
+                        account_id,
+                        sec_id,
+                        "security_group-as-source",
+                        src_string[1:],
+                        item[0],
+                        item[1],
+                        item[2],
+                        item[3],
+                        item[4],
+                        item[5]
+                    ]
+                )                            
         for ip_range in ingress_statement['IpRanges']:
             subnet = ip_range['CidrIp']
             if subnet == "0.0.0.0/0":
@@ -142,7 +146,37 @@ for sec_group in sec_groups_p:
                                 f"{protocol}={ports_opened}"
                             ]
                         )
-        
-pass
+
+# Clone a remote repository
+repo_url = "git@github.com:guidodg86/sg-database.git"
+local_path = "./temp_sg-database/"
+repo = git.Repo.clone_from(repo_url, local_path)
+origin = repo.remote(name='origin')
+
+
+with open("./temp_sg-database/ingress.csv", "w", newline='') as csv_ingress_f:
+    writer = csv.writer(csv_ingress_f)
+    writer.writerow(
+        [
+            "Account ID",
+            "Security Group",
+            "Source subnet",
+            "Source role-site",
+            "Ec2 name",
+            "Ec2 Id",
+            "Ec2 IP",
+            "Destination subnet",
+            "Destination role-site",  
+            "port and protocol"         
+        ]
+    )
+    writer.writerows(results)
+
+repo.index.add(['ingress.csv'])
+repo.index.commit('Automatic update of sg information')
+origin.push()
+
+shutil.rmtree(local_path, ignore_errors=True)
+
 
 
