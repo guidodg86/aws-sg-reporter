@@ -5,6 +5,7 @@ import os
 import git
 import shutil
 import csv
+import pandas as pd
 
 client = boto3.client("sts")
 account_id = client.get_caller_identity()["Account"]
@@ -237,6 +238,38 @@ for sec_group in sec_groups_p:
                         )
 
 
+headers_inbound =        [
+            "Account ID",
+            "Security Group",
+            "Source subnet",
+            "Source role-site",
+            "Ec2 name",
+            "Ec2 Id",
+            "Ec2 IP",
+            "Destination subnet",
+            "Destination role-site",  
+            "port and protocol"         
+        ]
+
+headers_outbound =         [
+            "Account ID",
+            "Security Group",
+            "Ec2 name",
+            "Ec2 Id",
+            "Ec2 IP",
+            "Source subnet",
+            "Source role-site",
+            "Destination subnet",
+            "Destination role-site",  
+            "port and protocol"         
+        ]
+
+#Creating sorted panda df
+df_inbound = pd.DataFrame(results, columns=headers_inbound)
+df_sorted_inbound = df_inbound.sort_values(by = ['Security Group', 'Ec2 Id'], ascending = [True, True], na_position = 'first')
+df_outbound = pd.DataFrame(results_egress, columns=headers_outbound)
+df_sorted_outbound = df_outbound.sort_values(by = ['Security Group', 'Ec2 Id'], ascending = [True, True], na_position = 'first')
+
 
 # Clone a remote repository
 repo_url = "git@github.com:guidodg86/sg-database.git"
@@ -244,42 +277,8 @@ local_path = "./temp_sg-database/"
 repo = git.Repo.clone_from(repo_url, local_path)
 origin = repo.remote(name='origin')
 
-
-with open("./temp_sg-database/inbound.csv", "w", newline='') as csv_ingress_f:
-    writer = csv.writer(csv_ingress_f)
-    writer.writerow(
-        [
-            "Account ID",
-            "Security Group",
-            "Source subnet",
-            "Source role-site",
-            "Ec2 name",
-            "Ec2 Id",
-            "Ec2 IP",
-            "Destination subnet",
-            "Destination role-site",  
-            "port and protocol"         
-        ]
-    )
-    writer.writerows(results)
-
-with open("./temp_sg-database/outbound.csv", "w", newline='') as csv_egress_f:
-    writer = csv.writer(csv_egress_f)
-    writer.writerow(
-        [
-            "Account ID",
-            "Security Group",
-            "Ec2 name",
-            "Ec2 Id",
-            "Ec2 IP",
-            "Source subnet",
-            "Source role-site",
-            "Destination subnet",
-            "Destination role-site",  
-            "port and protocol"         
-        ]
-    )
-    writer.writerows(results_egress)
+df_sorted_inbound.to_csv(local_path + 'inbound.csv', index=False)
+df_sorted_outbound.to_csv(local_path + 'outbound.csv', index=False)
 
 
 repo.index.add(['inbound.csv', 'outbound.csv'])
