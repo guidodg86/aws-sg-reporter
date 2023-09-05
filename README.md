@@ -30,4 +30,4 @@ You will need to use `aws configure` to set up connection with AWS. Also a varia
 In order to use the script we need set up a netbox locally and have a AWS account. To populate netbox and configure AWS you can use [aws-sample-infra](https://github.com/guidodg86/aws-sample-infra)
 
 ## Results
-Reports will update two csv files located in [aws-sample-infra] (https://github.com/guidodg86/sg-database/)
+Reports will update two csv files located in [sg-database](https://github.com/guidodg86/sg-database/)
